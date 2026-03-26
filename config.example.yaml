@@ -25,4 +25,4 @@ runtime:
   state_dir: state
   log_dir: logs
   timezone: UTC
-  allow_live_orders: false
+  allow_live_orders: false  # set true only for practice/live execution after testing
