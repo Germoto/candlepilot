@@ -12,6 +12,7 @@ dependencies = [
   "requests>=2.32.0",
   "pydantic>=2.7.0",
   "pyyaml>=6.0.1",
+  "flask>=3.0.0",
 ]
 
 [project.optional-dependencies]
@@ -23,4 +24,6 @@ dev = [
 candlepilot = "candlepilot.cli:main"
 
 [tool.setuptools.packages.find]
+where = ["src"]
+.find]
 where = ["src"]
