@@ -307,13 +307,39 @@ Before real money:
 ## Roadmap
 
 Near-term improvements:
-- session/time filters
-- spread filter
 - ATR-based stops
-- CSV import backtesting
+- CSV import backtesting from local files
 - broker abstraction for more providers
 - dashboard charts
 - notifications
+
+## v3 additions
+
+This iteration adds:
+- **spread filter** before execution
+- **session/time window filter** before execution
+- **backtest export** to JSON and CSV
+- improved **web interface** with guardrail settings and export buttons
+
+### New runtime config options
+```yaml
+runtime:
+  state_dir: state
+  log_dir: logs
+  timezone: UTC
+  allow_live_orders: false
+  spread_filter_enabled: true
+  max_spread_pips: 2.0
+  session_filter_enabled: true
+  session_start: "07:00"
+  session_end: "18:00"
+```
+
+### What the new filters do
+- **Spread filter** blocks entries when the current OANDA spread is above your limit.
+- **Session filter** blocks entries outside your configured time window.
+
+This is important because many simple bots get wrecked by entering during bad liquidity or wide spreads.
 
 ---
 

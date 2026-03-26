@@ -62,6 +62,21 @@ class OandaClient:
     def has_open_trade_for(self, instrument: str) -> bool:
         return any(t.get("instrument") == instrument for t in self.list_open_trades())
 
+    def get_pricing(self, instrument: str) -> dict[str, Any]:
+        data = self._get(f"/accounts/{self.broker.account_id}/pricing", params={"instruments": instrument})
+        prices = data.get("prices", [])
+        return prices[0] if prices else {}
+
+    def current_spread_pips(self, instrument: str, pip_value: float) -> float | None:
+        pricing = self.get_pricing(instrument)
+        bids = pricing.get("bids", [])
+        asks = pricing.get("asks", [])
+        if not bids or not asks:
+            return None
+        bid = float(bids[0]["price"])
+        ask = float(asks[0]["price"])
+        return (ask - bid) / pip_value
+
     def place_market_order(self, order: OrderRequest) -> dict[str, Any]:
         payload = {
             "order": {

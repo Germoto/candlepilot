@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 from .config import AppConfig
+from .filters import ExecutionFilters
 from .models import BotState, OrderRequest, Signal
 from .oanda import OandaClient
 from .risk import RiskManager
@@ -20,6 +21,7 @@ class TradingEngine:
         self.client = OandaClient(config.broker)
         self.strategy = CandleStrategy(config)
         self.risk = RiskManager(config)
+        self.filters = ExecutionFilters(config)
         self.state_path = Path(config.runtime.state_dir) / "bot_state.json"
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
         self.state = self._load_state()
@@ -53,6 +55,20 @@ class TradingEngine:
             self.config.strategy.granularity,
             self.config.strategy.candle_count,
         )
+        latest_closed = [c for c in candles if c.complete]
+        latest_time = latest_closed[-1].time if latest_closed else None
+
+        session_decision = self.filters.session_allowed(latest_time)
+        if not session_decision.allowed:
+            log.info("Session filter blocked trade: %s", session_decision.reason)
+            return
+
+        spread_pips = self.client.current_spread_pips(self.config.strategy.instrument, self.config.risk.pip_value)
+        spread_decision = self.filters.spread_allowed(spread_pips)
+        if not spread_decision.allowed:
+            log.info("Spread filter blocked trade: %s", spread_decision.reason)
+            return
+
         decision = self.strategy.evaluate(candles)
         log.info("Decision: %s | %s", decision.signal.value, decision.reason)
 

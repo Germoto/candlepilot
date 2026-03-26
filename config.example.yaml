@@ -26,3 +26,8 @@ runtime:
   log_dir: logs
   timezone: UTC
   allow_live_orders: false  # set true only for practice/live execution after testing
+  spread_filter_enabled: true
+  max_spread_pips: 2.0
+  session_filter_enabled: true
+  session_start: "07:00"
+  session_end: "18:00"

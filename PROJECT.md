@@ -151,10 +151,14 @@ In backtest:
 - no production deployment unit/service file yet
 
 ## Recommended next improvements
-1. Add spread filter.
-2. Add session windows (London / New York overlap, etc.).
-3. Add ATR-based dynamic SL/TP.
-4. Add CSV import/export backtesting.
-5. Add performance charts.
-6. Add notification channels.
-7. Add Docker deployment.
+1. Add ATR-based dynamic SL/TP.
+2. Add CSV import backtesting from local datasets.
+3. Add performance charts.
+4. Add notification channels.
+5. Add Docker deployment.
+
+## v3 implementation notes
+- Added `filters.py` for pre-trade spread/session checks.
+- Added OANDA pricing query support for live spread estimation.
+- Added backtest exporters to JSON and CSV.
+- Expanded web UI with guardrail controls and export downloads.

@@ -40,6 +40,11 @@ class RuntimeConfig(BaseModel):
     log_dir: str = "logs"
     timezone: str = "UTC"
     allow_live_orders: bool = False
+    spread_filter_enabled: bool = True
+    max_spread_pips: float = Field(default=2.0, ge=0)
+    session_filter_enabled: bool = True
+    session_start: str = "07:00"
+    session_end: str = "18:00"
 
 
 class AppConfig(BaseModel):

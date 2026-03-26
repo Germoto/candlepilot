@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, redirect, render_template_string, request, url_for
+from flask import Flask, redirect, render_template_string, request, send_file, url_for
 
 from .backtest import Backtester
 from .config import AppConfig, BrokerConfig, RiskConfig, RuntimeConfig, StrategyConfig
@@ -19,8 +19,8 @@ TEMPLATE = """
   <meta charset=\"utf-8\">
   <title>CandlePilot</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 2rem; max-width: 1100px; }
-    form { display:grid; grid-template-columns: repeat(2, minmax(280px, 1fr)); gap: 12px; }
+    body { font-family: Arial, sans-serif; margin: 2rem; max-width: 1200px; }
+    form.grid { display:grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap: 12px; }
     label { display:flex; flex-direction:column; font-size: 14px; }
     input, select { padding: 8px; }
     .full { grid-column: 1 / -1; }
@@ -29,15 +29,19 @@ TEMPLATE = """
     table { border-collapse: collapse; width:100%; }
     th, td { border:1px solid #ddd; padding: 8px; font-size: 13px; }
     .actions { display:flex; gap:12px; flex-wrap: wrap; margin-top: 1rem; }
-    button { padding:10px 14px; }
+    button, a.btn { padding:10px 14px; border:1px solid #888; background:#f7f7f7; text-decoration:none; color:#111; border-radius:6px; }
     pre { white-space: pre-wrap; word-break: break-word; }
+    .good { color: #0a7d22; }
+    .warn { color: #a15c00; }
   </style>
 </head>
 <body>
   <h1>CandlePilot Web</h1>
-  <p class=\"muted\">Configura el bot para demo, real o backtesting. Revisa siempre demo antes de live.</p>
+  <p class=\"muted\">Configura el bot para demo, real o backtesting. Lo recomendado: dry-run → practice → live.</p>
+
   <div class=\"card\">
-    <form method=\"post\" action=\"{{ url_for('save_config') }}\">
+    <h2>Configuración</h2>
+    <form class=\"grid\" method=\"post\" action=\"{{ url_for('save_config') }}\">
       {% for field in fields %}
       <label class=\"{{ 'full' if field.full else '' }}\">{{ field.label }}
         {% if field.type == 'select' %}
@@ -58,23 +62,49 @@ TEMPLATE = """
   </div>
 
   <div class=\"card\">
+    <h2>Acciones</h2>
     <div class=\"actions\">
       <form method=\"post\" action=\"{{ url_for('run_once') }}\"><button type=\"submit\">Ejecutar 1 ciclo</button></form>
       <form method=\"post\" action=\"{{ url_for('run_backtest') }}\"><button type=\"submit\">Correr backtest</button></form>
+      <a class=\"btn\" href=\"{{ url_for('download_json') }}\">Descargar backtest JSON</a>
+      <a class=\"btn\" href=\"{{ url_for('download_csv') }}\">Descargar backtest CSV</a>
     </div>
     {% if message %}<p><strong>{{ message }}</strong></p>{% endif %}
-    {% if result %}<pre>{{ result }}</pre>{% endif %}
+    {% if status %}<pre>{{ status }}</pre>{% endif %}
+  </div>
+
+  <div class=\"card\">
+    <h2>Guardrails v3</h2>
+    <ul>
+      <li>Filtro de spread: <strong>{{ form_data.get('spread_filter_enabled', 'true') }}</strong></li>
+      <li>Spread máximo: <strong>{{ form_data.get('max_spread_pips', '2.0') }}</strong> pips</li>
+      <li>Filtro de sesión: <strong>{{ form_data.get('session_filter_enabled', 'true') }}</strong></li>
+      <li>Ventana: <strong>{{ form_data.get('session_start', '07:00') }} - {{ form_data.get('session_end', '18:00') }}</strong> ({{ form_data.get('timezone', 'UTC') }})</li>
+    </ul>
   </div>
 
   {% if backtest %}
   <div class=\"card\">
     <h2>Backtest</h2>
-    <p>Total trades: {{ backtest.total_trades }} | Wins: {{ backtest.wins }} | Losses: {{ backtest.losses }} | Win rate: {{ '%.2f'|format(backtest.win_rate) }}% | Net pips: {{ '%.2f'|format(backtest.net_pips) }}</p>
+    <p>
+      Total trades: {{ backtest.total_trades }} |
+      Wins: <span class=\"good\">{{ backtest.wins }}</span> |
+      Losses: <span class=\"warn\">{{ backtest.losses }}</span> |
+      Win rate: {{ '%.2f'|format(backtest.win_rate) }}% |
+      Net pips: {{ '%.2f'|format(backtest.net_pips) }} |
+      Avg pips: {{ '%.2f'|format(backtest.avg_pips) }}
+    </p>
     <table>
       <tr><th>Entry</th><th>Exit</th><th>Side</th><th>Entry Price</th><th>Exit Price</th><th>Pips</th><th>Reason</th></tr>
-      {% for trade in backtest.trades[:20] %}
+      {% for trade in backtest.trades[:30] %}
       <tr>
-        <td>{{ trade.entry_time }}</td><td>{{ trade.exit_time }}</td><td>{{ trade.side }}</td><td>{{ trade.entry_price }}</td><td>{{ trade.exit_price }}</td><td>{{ '%.2f'|format(trade.result_pips) }}</td><td>{{ trade.reason }}</td>
+        <td>{{ trade.entry_time }}</td>
+        <td>{{ trade.exit_time }}</td>
+        <td>{{ trade.side }}</td>
+        <td>{{ trade.entry_price }}</td>
+        <td>{{ trade.exit_price }}</td>
+        <td>{{ '%.2f'|format(trade.result_pips) }}</td>
+        <td>{{ trade.reason }}</td>
       </tr>
       {% endfor %}
     </table>
@@ -98,7 +128,19 @@ FIELDS = [
     {"name": "max_daily_trades", "label": "Max daily trades", "type": "number", "full": False},
     {"name": "max_consecutive_losses", "label": "Max consecutive losses", "type": "number", "full": False},
     {"name": "candle_count", "label": "Candle count", "type": "number", "full": False},
+    {"name": "spread_filter_enabled", "label": "Spread filter enabled", "type": "text", "full": False},
+    {"name": "max_spread_pips", "label": "Max spread pips", "type": "number", "full": False},
+    {"name": "session_filter_enabled", "label": "Session filter enabled", "type": "text", "full": False},
+    {"name": "session_start", "label": "Session start (HH:MM)", "type": "text", "full": False},
+    {"name": "session_end", "label": "Session end (HH:MM)", "type": "text", "full": False},
+    {"name": "timezone", "label": "Timezone", "type": "text", "full": False},
 ]
+
+
+def _to_bool(value: str, default: bool = False) -> bool:
+    if value is None:
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _build_config(data: dict[str, str]) -> AppConfig:
@@ -121,7 +163,15 @@ def _build_config(data: dict[str, str]) -> AppConfig:
             max_daily_trades=int(data.get("max_daily_trades", 5)),
             max_consecutive_losses=int(data.get("max_consecutive_losses", 3)),
         ),
-        runtime=RuntimeConfig(allow_live_orders=str(data.get("allow_live_orders", "false")).lower() == "true"),
+        runtime=RuntimeConfig(
+            allow_live_orders=_to_bool(data.get("allow_live_orders"), False),
+            timezone=data.get("timezone", "UTC"),
+            spread_filter_enabled=_to_bool(data.get("spread_filter_enabled"), True),
+            max_spread_pips=float(data.get("max_spread_pips", 2.0)),
+            session_filter_enabled=_to_bool(data.get("session_filter_enabled"), True),
+            session_start=data.get("session_start", "07:00"),
+            session_end=data.get("session_end", "18:00"),
+        ),
     )
 
 
@@ -145,17 +195,32 @@ def create_app(config_path: str = "web_config.json") -> Flask:
             "max_daily_trades": "5",
             "max_consecutive_losses": "3",
             "candle_count": "250",
+            "spread_filter_enabled": "true",
+            "max_spread_pips": "2.0",
+            "session_filter_enabled": "true",
+            "session_start": "07:00",
+            "session_end": "18:00",
+            "timezone": "UTC",
             "account_id": "",
             "api_token": "",
         }
 
-    @app.get("/")
-    def index():
-        backtest = None
+    def latest_backtest() -> dict[str, Any] | None:
         backtest_file = Path("state/last_backtest.json")
         if backtest_file.exists():
-            backtest = json.loads(backtest_file.read_text())
-        return render_template_string(TEMPLATE, fields=FIELDS, form_data=load_form_data(), message=request.args.get("message"), result=request.args.get("result"), backtest=backtest)
+            return json.loads(backtest_file.read_text())
+        return None
+
+    @app.get("/")
+    def index():
+        return render_template_string(
+            TEMPLATE,
+            fields=FIELDS,
+            form_data=load_form_data(),
+            message=request.args.get("message"),
+            status=request.args.get("status"),
+            backtest=latest_backtest(),
+        )
 
     @app.post("/save-config")
     def save_config():
@@ -169,7 +234,8 @@ def create_app(config_path: str = "web_config.json") -> Flask:
         cfg = _build_config(data)
         engine = TradingEngine(cfg)
         engine.run_once()
-        return redirect(url_for("index", message="Ciclo ejecutado. Revisa logs/candlepilot.log"))
+        status = f"Mode={cfg.mode}, Env={cfg.broker.environment}, live_orders={cfg.runtime.allow_live_orders}, spread_filter={cfg.runtime.spread_filter_enabled}, session_filter={cfg.runtime.session_filter_enabled}"
+        return redirect(url_for("index", message="Ciclo ejecutado. Revisa logs/candlepilot.log", status=status))
 
     @app.post("/run-backtest")
     def run_backtest():
@@ -177,10 +243,24 @@ def create_app(config_path: str = "web_config.json") -> Flask:
         cfg = _build_config(data)
         client = OandaClient(cfg.broker)
         candles = client.fetch_candles(cfg.strategy.instrument, cfg.strategy.granularity, cfg.strategy.candle_count)
-        report = Backtester(cfg).run(candles)
-        Path("state").mkdir(exist_ok=True)
-        Path("state/last_backtest.json").write_text(json.dumps(report.to_dict(), indent=2))
-        return redirect(url_for("index", message="Backtest completado"))
+        backtester = Backtester(cfg)
+        report = backtester.run(candles)
+        backtester.export(report, "state")
+        return redirect(url_for("index", message="Backtest completado. Exportado a state/last_backtest.json y CSV"))
+
+    @app.get("/download/backtest.json")
+    def download_json():
+        path = Path("state/last_backtest.json")
+        if not path.exists():
+            return redirect(url_for("index", message="Aún no existe backtest JSON"))
+        return send_file(path, as_attachment=True)
+
+    @app.get("/download/backtest.csv")
+    def download_csv():
+        path = Path("state/last_backtest_trades.csv")
+        if not path.exists():
+            return redirect(url_for("index", message="Aún no existe backtest CSV"))
+        return send_file(path, as_attachment=True)
 
     return app
 

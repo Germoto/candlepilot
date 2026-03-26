@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Any
 
 from .config import AppConfig
 from .models import Candle, Signal
+from .reporting import write_json, write_trades_csv
 from .strategy import CandleStrategy
 
 
@@ -61,7 +63,6 @@ class Backtester:
                 i += 1
                 continue
 
-            entry_candle = candles[i]
             next_index = i + 1
             if next_index >= len(candles):
                 break
@@ -73,6 +74,7 @@ class Backtester:
             exit_price = entry_price
             exit_time = candles[next_index].time
             exit_reason = "end_of_data"
+            j = next_index
 
             for j in range(next_index, len(candles)):
                 c = candles[j]
@@ -128,3 +130,9 @@ class Backtester:
         avg_pips = net_pips / total if total else 0.0
         win_rate = (wins / total * 100) if total else 0.0
         return BacktestReport(trades, total, wins, losses, win_rate, net_pips, avg_pips)
+
+    def export(self, report: BacktestReport, directory: str | Path = "state") -> None:
+        directory = Path(directory)
+        payload = report.to_dict()
+        write_json(directory / "last_backtest.json", payload)
+        write_trades_csv(directory / "last_backtest_trades.csv", payload["trades"])
