@@ -1,0 +1,28 @@
+mode: dry_run
+broker:
+  provider: oanda
+  account_id: "YOUR_OANDA_ACCOUNT_ID"
+  api_token: "YOUR_OANDA_API_TOKEN"
+  environment: practice
+strategy:
+  instrument: EUR_USD
+  granularity: M5
+  candle_count: 250
+  ema_fast: 9
+  ema_slow: 21
+  rsi_period: 14
+  rsi_buy_threshold: 55
+  rsi_sell_threshold: 45
+risk:
+  risk_per_trade_pct: 1.0
+  stop_loss_pips: 10
+  take_profit_pips: 15
+  pip_value: 0.0001
+  max_daily_trades: 5
+  max_consecutive_losses: 3
+  units: 1000
+runtime:
+  state_dir: state
+  log_dir: logs
+  timezone: UTC
+  allow_live_orders: false
